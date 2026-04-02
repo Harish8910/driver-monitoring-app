@@ -13,19 +13,57 @@ import RouteLayer from "./RouteLayer"
 type MapContainerProps = {
   currentLocation: Coordinates
   destination: Coordinates | null
+  heading: number | null
+  isNavigating: boolean
   routeGeometry: LineStringGeometry | null
   vehicleType: VehicleType
+}
+
+function getRouteBearing(routeGeometry: LineStringGeometry | null) {
+  if (!routeGeometry || routeGeometry.coordinates.length < 2) {
+    return null
+  }
+
+  const [startLongitude, startLatitude] = routeGeometry.coordinates[0]
+  const [endLongitude, endLatitude] = routeGeometry.coordinates[1]
+  const startLatitudeRadians = (startLatitude * Math.PI) / 180
+  const endLatitudeRadians = (endLatitude * Math.PI) / 180
+  const longitudeDeltaRadians = ((endLongitude - startLongitude) * Math.PI) / 180
+  const y = Math.sin(longitudeDeltaRadians) * Math.cos(endLatitudeRadians)
+  const x =
+    Math.cos(startLatitudeRadians) * Math.sin(endLatitudeRadians) -
+    Math.sin(startLatitudeRadians) *
+      Math.cos(endLatitudeRadians) *
+      Math.cos(longitudeDeltaRadians)
+
+  return (((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360
 }
 
 function MapContainer({
   currentLocation,
   destination,
+  heading,
+  isNavigating,
   routeGeometry,
   vehicleType
 }: MapContainerProps) {
   const mapRef = useRef<MapRef | null>(null)
 
   useEffect(() => {
+    if (isNavigating) {
+      const navigationBearing = heading ?? getRouteBearing(routeGeometry) ?? 0
+
+      mapRef.current?.flyTo({
+        center: [currentLocation.longitude, currentLocation.latitude],
+        zoom: 17.2,
+        pitch: 58,
+        bearing: navigationBearing,
+        duration: 800
+      })
+
+      return
+    }
+
     if (routeGeometry?.coordinates.length) {
       const [firstLng, firstLat] = routeGeometry.coordinates[0]
       const bounds = routeGeometry.coordinates.reduce(
@@ -62,7 +100,7 @@ function MapContainer({
       zoom: 14,
       duration: 1000
     })
-  }, [currentLocation, routeGeometry])
+  }, [currentLocation, isNavigating, routeGeometry])
 
   return (
     <Map
@@ -73,7 +111,7 @@ function MapContainer({
         longitude: currentLocation.longitude,
         zoom: 14
       }}
-      style={{ width: "100%", height: "100vh" }}
+      style={{ width: "100vw", height: "100vh" }}
       mapStyle="mapbox://styles/mapbox/streets-v11"
     >
       <NavigationControl position="bottom-right" />
@@ -92,14 +130,47 @@ function MapContainer({
       >
         <div
           style={{
-            width: "18px",
-            height: "18px",
-            borderRadius: "999px",
-            background: "#0f766e",
-            border: "3px solid #ffffff",
-            boxShadow: "0 0 0 6px rgba(15, 118, 110, 0.2)"
+            position: "relative",
+            width: "30px",
+            height: "30px",
+            display: "grid",
+            placeItems: "center"
           }}
-        />
+        >
+          <div
+            style={{
+              position: "absolute",
+              width: "30px",
+              height: "30px",
+              borderRadius: "999px",
+              background: "rgba(15, 118, 110, 0.18)"
+            }}
+          />
+          <div
+            style={{
+              width: "18px",
+              height: "18px",
+              borderRadius: "999px",
+              background: "#0f766e",
+              border: "3px solid #ffffff",
+              boxShadow: "0 10px 18px rgba(15, 118, 110, 0.24)"
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: "-8px",
+              width: 0,
+              height: 0,
+              borderLeft: "7px solid transparent",
+              borderRight: "7px solid transparent",
+              borderBottom: "14px solid #0f766e",
+              transform: `rotate(${heading ?? getRouteBearing(routeGeometry) ?? 0}deg)`,
+              transformOrigin: "center 22px",
+              filter: "drop-shadow(0 4px 8px rgba(15, 118, 110, 0.22))"
+            }}
+          />
+        </div>
       </Marker>
 
       {destination ? (

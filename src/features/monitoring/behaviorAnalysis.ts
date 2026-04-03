@@ -37,6 +37,40 @@ export function getAttentionStateFromFace(
     return "face-not-visible"
   }
 
+  const nose = face.landmarks[1]
+  const leftEyeOuter = face.landmarks[33]
+  const rightEyeOuter = face.landmarks[263]
+  const mouthLeft = face.landmarks[61]
+  const mouthRight = face.landmarks[291]
+
+  if (nose && leftEyeOuter && rightEyeOuter && mouthLeft && mouthRight) {
+    const eyeMidX = (leftEyeOuter.x + rightEyeOuter.x) / 2
+    const eyeMidY = (leftEyeOuter.y + rightEyeOuter.y) / 2
+    const mouthMidY = (mouthLeft.y + mouthRight.y) / 2
+    const eyeDistance = Math.max(Math.abs(rightEyeOuter.x - leftEyeOuter.x), 0.001)
+    const faceHeight = Math.max(mouthMidY - eyeMidY, 0.001)
+    const horizontalOffset = (nose.x - eyeMidX) / eyeDistance
+    const verticalOffset = (nose.y - eyeMidY) / faceHeight
+
+    if (horizontalOffset > 0.16) {
+      return "looking-left"
+    }
+
+    if (horizontalOffset < -0.16) {
+      return "looking-right"
+    }
+
+    if (verticalOffset < 0.48) {
+      return "looking-up"
+    }
+
+    if (verticalOffset > 0.92) {
+      return "looking-down"
+    }
+
+    return "attentive"
+  }
+
   const centerX = face.boundingBox.x + face.boundingBox.width / 2
   const centerY = face.boundingBox.y + face.boundingBox.height / 2
   const normalizedX = centerX / videoWidth

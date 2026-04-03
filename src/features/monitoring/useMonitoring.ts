@@ -37,6 +37,7 @@ export function useMonitoring({ enabled }: UseMonitoringOptions) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const intervalRef = useRef<number | null>(null)
+  const isAnalyzingRef = useRef(false)
   const activeStateSinceRef = useRef<{
     startedAt: number
     state: DriverAttentionState
@@ -50,10 +51,6 @@ export function useMonitoring({ enabled }: UseMonitoringOptions) {
   const [isSupported, setIsSupported] = useState(true)
   const [currentState, setCurrentState] = useState<DriverAttentionState>("attentive")
   const [lastAlert, setLastAlert] = useState<MonitoringAlert | null>(null)
-
-  useEffect(() => {
-    setIsSupported(isFaceDetectionSupported())
-  }, [])
 
   useEffect(() => {
     const stopMonitoringSession = () => {
@@ -70,6 +67,7 @@ export function useMonitoring({ enabled }: UseMonitoringOptions) {
         track.stop()
       })
       streamRef.current = null
+      isAnalyzingRef.current = false
       activeStateSinceRef.current = null
       lastAlertRef.current = null
       stopAlertBeep()
@@ -80,6 +78,7 @@ export function useMonitoring({ enabled }: UseMonitoringOptions) {
     }
 
     if (!enabled) {
+      setIsSupported(isFaceDetectionSupported())
       stopMonitoringSession()
       return
     }
@@ -93,11 +92,17 @@ export function useMonitoring({ enabled }: UseMonitoringOptions) {
     let isCancelled = false
 
     const analyze = async () => {
+      if (isAnalyzingRef.current) {
+        return
+      }
+
       const video = videoRef.current
 
       if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
         return
       }
+
+      isAnalyzingRef.current = true
 
       try {
         const detectedFace = await detectPrimaryFace(video)
@@ -108,7 +113,7 @@ export function useMonitoring({ enabled }: UseMonitoringOptions) {
         )
         const now = Date.now()
         const eyesVisible = hasVisibleEyes(detectedFace)
-        const supportsEyeProxy = Boolean(detectedFace?.landmarks?.length)
+        const supportsEyeProxy = Boolean(detectedFace)
         let nextState = attentionState
         let threshold = ATTENTION_ALERT_DELAY_MS
 
@@ -159,6 +164,8 @@ export function useMonitoring({ enabled }: UseMonitoringOptions) {
         speakNavigationAlert(label)
       } catch {
         setStatus("error")
+      } finally {
+        isAnalyzingRef.current = false
       }
     }
 
@@ -187,6 +194,7 @@ export function useMonitoring({ enabled }: UseMonitoringOptions) {
           await videoRef.current.play()
         }
 
+        setIsSupported(true)
         setStatus("active")
         intervalRef.current = window.setInterval(() => {
           void analyze()

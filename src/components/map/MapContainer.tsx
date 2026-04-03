@@ -15,6 +15,7 @@ type MapContainerProps = {
   destination: Coordinates | null
   heading: number | null
   isNavigating: boolean
+  onMapPress?: () => void
   routeGeometry: LineStringGeometry | null
   vehicleType: VehicleType
 }
@@ -44,6 +45,7 @@ function MapContainer({
   destination,
   heading,
   isNavigating,
+  onMapPress,
   routeGeometry,
   vehicleType
 }: MapContainerProps) {
@@ -111,6 +113,7 @@ function MapContainer({
         longitude: currentLocation.longitude,
         zoom: 14
       }}
+      onClick={onMapPress}
       style={{ width: "100vw", height: "100vh" }}
       mapStyle="mapbox://styles/mapbox/streets-v11"
     >

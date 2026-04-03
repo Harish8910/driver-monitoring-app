@@ -57,6 +57,8 @@ function MapHome() {
   const [isNavigating, setIsNavigating] = useState(false)
   const [isMonitoringEnabled, setIsMonitoringEnabled] = useState(false)
   const [isMonitoringPromptOpen, setIsMonitoringPromptOpen] = useState(false)
+  const [isCameraPanelOpen, setIsCameraPanelOpen] = useState(false)
+  const [searchCollapseToken, setSearchCollapseToken] = useState(0)
   const lastNavigationRefreshRef = useRef<{
     location: Coordinates
     requestedAt: number
@@ -100,6 +102,10 @@ function MapHome() {
 
     if (monitoring.status === "unsupported") {
       return "Driver monitoring is not supported on this browser"
+    }
+
+    if (monitoring.status === "error") {
+      return "Driver monitoring could not start right now"
     }
 
     return null
@@ -225,6 +231,7 @@ function MapHome() {
       setIsRouteLoading(false)
       setIsMonitoringEnabled(false)
       setIsMonitoringPromptOpen(false)
+      setIsCameraPanelOpen(false)
       lastNavigationRefreshRef.current = null
       lastSpokenStepRef.current = null
 
@@ -320,6 +327,7 @@ function MapHome() {
     setIsNavigating(false)
     setIsMonitoringEnabled(false)
     setIsMonitoringPromptOpen(false)
+    setIsCameraPanelOpen(false)
     lastNavigationRefreshRef.current = null
     lastSpokenStepRef.current = null
     hasAnnouncedArrivalRef.current = false
@@ -359,6 +367,7 @@ function MapHome() {
     setIsNavigating(false)
     setIsMonitoringEnabled(false)
     setIsMonitoringPromptOpen(false)
+    setIsCameraPanelOpen(false)
     lastNavigationRefreshRef.current = null
     lastSpokenStepRef.current = null
     hasAnnouncedArrivalRef.current = false
@@ -391,6 +400,7 @@ function MapHome() {
     setIsMonitoringPromptOpen(false)
     setIsNavigating(true)
     setIsMonitoringEnabled(enableMonitoring)
+    setIsCameraPanelOpen(false)
     setPreviewOrigin(currentLocation)
     setRouteError(null)
     lastNavigationRefreshRef.current = null
@@ -407,6 +417,7 @@ function MapHome() {
     setIsNavigating(false)
     setIsMonitoringEnabled(false)
     setIsMonitoringPromptOpen(false)
+    setIsCameraPanelOpen(false)
     setPreviewOrigin(currentLocation)
     setRouteError(null)
     setIsSidebarOpen(false)
@@ -422,9 +433,16 @@ function MapHome() {
     saveSearchHistory([])
   }
 
+  const handleMapPress = () => {
+    if (!query.trim() && !selectedPlace && !isNavigating) {
+      setSearchCollapseToken((current) => current + 1)
+    }
+  }
+
   const handleLogout = async () => {
     setIsMonitoringEnabled(false)
     setIsMonitoringPromptOpen(false)
+    setIsCameraPanelOpen(false)
     stopAlertBeep()
     stopVoiceAlerts()
     await signOut()
@@ -540,6 +558,7 @@ function MapHome() {
         destination={selectedPlace?.coordinates ?? null}
         heading={location?.heading ?? null}
         isNavigating={isNavigating}
+        onMapPress={handleMapPress}
         routeGeometry={route?.geometry ?? null}
         vehicleType={vehicleType}
       />
@@ -655,6 +674,8 @@ function MapHome() {
         <>
           <CameraView
             attentionState={monitoring.currentState}
+            isExpanded={isCameraPanelOpen}
+            onToggle={() => setIsCameraPanelOpen((current) => !current)}
             status={monitoring.status}
             videoRef={monitoring.videoRef}
           />
@@ -674,10 +695,12 @@ function MapHome() {
         isRouteLoading={isRouteLoading}
         isSearchLoading={isSearchLoading}
         onChange={handleQueryChange}
+        onCollapseRequest={() => setSearchCollapseToken((current) => current + 1)}
         onStartNavigation={handleStartNavigation}
         onStopNavigation={handleStopNavigation}
         onSelect={handleSuggestionSelect}
         onVehicleTypeChange={setVehicleType}
+        collapseToken={searchCollapseToken}
         panelOffsetLeft={92}
         query={query}
         routeProfileLabel={route?.profileLabel ?? null}

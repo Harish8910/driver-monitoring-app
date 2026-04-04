@@ -54,7 +54,7 @@ function safelySetPaintProperty(
   value: string | number
 ) {
   try {
-    map.setPaintProperty(layerId, property, value)
+    map.setPaintProperty(layerId, property as any, value)
   } catch {
     // Ignore layers that do not support this paint property.
   }

@@ -17,6 +17,7 @@ type MapContainerProps = {
   isNavigating: boolean
   onMapPress?: () => void
   routeGeometry: LineStringGeometry | null
+  theme: "light" | "dark"
   vehicleType: VehicleType
 }
 
@@ -40,6 +41,25 @@ function getRouteBearing(routeGeometry: LineStringGeometry | null) {
   return (((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360
 }
 
+const cameraEasing = (progress: number) => 1 - Math.pow(1 - progress, 3)
+const darkWaterColor = "#3b82f6"
+const darkRoadColor = "rgba(248, 250, 252, 0.24)"
+const darkMajorRoadColor = "rgba(255, 255, 255, 0.38)"
+const darkBackgroundColor = "#101214"
+
+function safelySetPaintProperty(
+  map: ReturnType<NonNullable<MapRef["getMap"]>>,
+  layerId: string,
+  property: string,
+  value: string | number
+) {
+  try {
+    map.setPaintProperty(layerId, property, value)
+  } catch {
+    // Ignore layers that do not support this paint property.
+  }
+}
+
 function MapContainer({
   currentLocation,
   destination,
@@ -47,20 +67,84 @@ function MapContainer({
   isNavigating,
   onMapPress,
   routeGeometry,
+  theme,
   vehicleType
 }: MapContainerProps) {
   const mapRef = useRef<MapRef | null>(null)
 
   useEffect(() => {
+    if (theme !== "dark") {
+      return
+    }
+
+    const map = mapRef.current?.getMap()
+
+    if (!map) {
+      return
+    }
+
+    const applyDarkThemeTweaks = () => {
+      if (!map.isStyleLoaded()) {
+        return
+      }
+
+      const layers = map.getStyle()?.layers ?? []
+
+      layers.forEach((layer) => {
+        const layerId = layer.id.toLowerCase()
+
+        if (layer.type === "background" && layerId.includes("background")) {
+          safelySetPaintProperty(map, layer.id, "background-color", darkBackgroundColor)
+        }
+
+        if (layer.type === "fill" && layerId.includes("water")) {
+          safelySetPaintProperty(map, layer.id, "fill-color", darkWaterColor)
+          safelySetPaintProperty(map, layer.id, "fill-opacity", 0.9)
+        }
+
+        if (
+          layer.type === "line" &&
+          (layerId.includes("road") || layerId.includes("bridge") || layerId.includes("tunnel"))
+        ) {
+          const isMajorRoad =
+            layerId.includes("motorway") ||
+            layerId.includes("trunk") ||
+            layerId.includes("primary")
+
+          safelySetPaintProperty(
+            map,
+            layer.id,
+            "line-color",
+            isMajorRoad ? darkMajorRoadColor : darkRoadColor
+          )
+          safelySetPaintProperty(map, layer.id, "line-opacity", isMajorRoad ? 0.92 : 0.76)
+        }
+      })
+    }
+
+    if (map.isStyleLoaded()) {
+      applyDarkThemeTweaks()
+    }
+
+    map.on("styledata", applyDarkThemeTweaks)
+
+    return () => {
+      map.off("styledata", applyDarkThemeTweaks)
+    }
+  }, [theme])
+
+  useEffect(() => {
     if (isNavigating) {
       const navigationBearing = heading ?? getRouteBearing(routeGeometry) ?? 0
 
-      mapRef.current?.flyTo({
+      mapRef.current?.easeTo({
         center: [currentLocation.longitude, currentLocation.latitude],
         zoom: 17.2,
         pitch: 58,
         bearing: navigationBearing,
-        duration: 800
+        duration: 1200,
+        easing: cameraEasing,
+        essential: true
       })
 
       return
@@ -89,20 +173,31 @@ function MapContainer({
           [bounds.maxLng, bounds.maxLat]
         ],
         {
-          padding: 90,
-          duration: 1000
+          padding: {
+            top: 120,
+            right: 84,
+            bottom: 156,
+            left: 84
+          },
+          duration: 1700,
+          pitch: 14,
+          bearing: 0,
+          essential: true,
+          easing: cameraEasing
         }
       )
 
       return
     }
 
-    mapRef.current?.flyTo({
+    mapRef.current?.easeTo({
       center: [currentLocation.longitude, currentLocation.latitude],
       zoom: 14,
-      duration: 1000
+      duration: 1200,
+      easing: cameraEasing,
+      essential: true
     })
-  }, [currentLocation, isNavigating, routeGeometry])
+  }, [currentLocation, heading, isNavigating, routeGeometry, vehicleType])
 
   return (
     <Map
@@ -115,7 +210,11 @@ function MapContainer({
       }}
       onClick={onMapPress}
       style={{ width: "100vw", height: "100vh" }}
-      mapStyle="mapbox://styles/mapbox/streets-v11"
+      mapStyle={
+        theme === "dark"
+          ? "mapbox://styles/mapbox/dark-v11"
+          : "mapbox://styles/mapbox/streets-v11"
+      }
     >
       <NavigationControl position="bottom-right" />
 

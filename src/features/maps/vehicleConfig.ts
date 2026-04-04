@@ -1,5 +1,7 @@
 export type VehicleType = "car" | "bike" | "walk"
 
+const SHARED_ROUTE_COLOR = "#0f766e"
+
 type VehicleOption = {
   label: string
   mapboxProfile: "driving-traffic" | "walking"
@@ -13,21 +15,21 @@ export const VEHICLE_CONFIG: Record<VehicleType, VehicleOption> = {
     label: "Car",
     mapboxProfile: "driving-traffic",
     etaMultiplier: 1,
-    color: "#0f766e",
+    color: SHARED_ROUTE_COLOR,
     icon: "Car"
   },
   bike: {
     label: "Bike",
     mapboxProfile: "driving-traffic",
     etaMultiplier: 0.9,
-    color: "#c2410c",
+    color: SHARED_ROUTE_COLOR,
     icon: "Bike"
   },
   walk: {
     label: "Walk",
     mapboxProfile: "walking",
     etaMultiplier: 1,
-    color: "#7c3aed",
+    color: SHARED_ROUTE_COLOR,
     icon: "Walk"
   }
 }

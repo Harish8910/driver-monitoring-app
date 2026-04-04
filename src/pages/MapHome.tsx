@@ -37,11 +37,29 @@ import {
 } from "../features/maps/mapService"
 import { type VehicleType } from "../features/maps/vehicleConfig"
 
+type ThemeMode = "light" | "dark" | "auto"
+
+function getAutomaticTheme(timestamp: number) {
+  const hour = new Date(timestamp).getHours()
+
+  return hour >= 18 || hour < 6 ? "dark" : "light"
+}
+
 function MapHome() {
   const navigate = useNavigate()
   const location = useGeolocation()
   const [query, setQuery] = useState("")
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") {
+      return "light"
+    }
+
+    const savedTheme = window.localStorage.getItem("map-theme-mode")
+
+    return savedTheme === "dark" || savedTheme === "auto" ? savedTheme : "light"
+  })
+  const [currentTime, setCurrentTime] = useState(() => Date.now())
   const [searchHistory, setSearchHistory] = useState<SearchHistoryEntry[]>(() =>
     loadSearchHistory()
   )
@@ -58,7 +76,6 @@ function MapHome() {
   const [isMonitoringEnabled, setIsMonitoringEnabled] = useState(false)
   const [isMonitoringPromptOpen, setIsMonitoringPromptOpen] = useState(false)
   const [isCameraPanelOpen, setIsCameraPanelOpen] = useState(false)
-  const [searchCollapseToken, setSearchCollapseToken] = useState(0)
   const lastNavigationRefreshRef = useRef<{
     location: Coordinates
     requestedAt: number
@@ -68,6 +85,11 @@ function MapHome() {
   const monitoring = useMonitoring({
     enabled: isNavigating && isMonitoringEnabled
   })
+  const resolvedTheme = useMemo(
+    () => (themeMode === "auto" ? getAutomaticTheme(currentTime) : themeMode),
+    [currentTime, themeMode]
+  )
+  const isDarkTheme = resolvedTheme === "dark"
 
   const currentLocation = useMemo(() => {
     if (!location) {
@@ -116,6 +138,28 @@ function MapHome() {
     monitoring.lastAlert,
     monitoring.status
   ])
+
+  useEffect(() => {
+    window.localStorage.setItem("map-theme-mode", themeMode)
+  }, [themeMode])
+
+  useEffect(() => {
+    document.documentElement.style.colorScheme = resolvedTheme
+  }, [resolvedTheme])
+
+  useEffect(() => {
+    if (themeMode !== "auto") {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now())
+    }, 60000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [themeMode])
 
   useEffect(() => {
     if (!currentLocation) {
@@ -428,17 +472,6 @@ function MapHome() {
     stopVoiceAlerts()
   }
 
-  const handleClearHistory = () => {
-    setSearchHistory([])
-    saveSearchHistory([])
-  }
-
-  const handleMapPress = () => {
-    if (!query.trim() && !selectedPlace && !isNavigating) {
-      setSearchCollapseToken((current) => current + 1)
-    }
-  }
-
   const handleLogout = async () => {
     setIsMonitoringEnabled(false)
     setIsMonitoringPromptOpen(false)
@@ -458,8 +491,9 @@ function MapHome() {
           display: "grid",
           placeItems: "center",
           padding: "24px",
-          background:
-            "linear-gradient(135deg, rgba(226, 232, 240, 0.7), rgba(255, 255, 255, 1))"
+          background: isDarkTheme
+            ? "linear-gradient(135deg, rgba(2,6,23,0.96), rgba(15,23,42,0.98))"
+            : "linear-gradient(135deg, rgba(226, 232, 240, 0.7), rgba(255, 255, 255, 1))"
         }}
       >
         <div
@@ -467,12 +501,15 @@ function MapHome() {
             maxWidth: "420px",
             padding: "28px",
             borderRadius: "24px",
-            background: "#ffffff",
-            boxShadow: "0 24px 48px rgba(15, 23, 42, 0.12)"
+            background: isDarkTheme ? "rgba(15,23,42,0.96)" : "#ffffff",
+            color: isDarkTheme ? "#f8fafc" : "#0f172a",
+            boxShadow: isDarkTheme
+              ? "0 24px 48px rgba(2, 6, 23, 0.34)"
+              : "0 24px 48px rgba(15, 23, 42, 0.12)"
           }}
         >
           <h2>Enable location to continue</h2>
-          <p style={{ marginTop: "10px" }}>
+          <p style={{ marginTop: "10px", color: isDarkTheme ? "#cbd5e1" : "#475569" }}>
             Your live location is needed before we can suggest destinations and
             calculate the fastest route.
           </p>
@@ -487,79 +524,24 @@ function MapHome() {
         position: "fixed",
         inset: 0,
         overflow: "hidden",
-        background: "#e2e8f0"
+        background: isDarkTheme ? "#020617" : "#e2e8f0"
       }}
     >
-      <button
-        type="button"
-        aria-label="Open trip menu"
-        onClick={() => setIsSidebarOpen(true)}
-        style={{
-          position: "fixed",
-          top: 20,
-          left: 20,
-          width: "56px",
-          height: "56px",
-          borderRadius: "18px",
-          border: "1px solid rgba(255,255,255,0.72)",
-          background:
-            "linear-gradient(145deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.92) 100%)",
-          backdropFilter: "blur(20px)",
-          boxShadow:
-            "0 20px 44px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255,255,255,0.8)",
-          color: "#0f172a",
-          cursor: "pointer",
-          zIndex: 6,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "4px"
-        }}
-      >
-        <span
-          style={{
-            width: "20px",
-            height: "2px",
-            borderRadius: "999px",
-            background: "#0f172a",
-            display: "block"
-          }}
-        />
-        <span
-          style={{
-            width: "20px",
-            height: "2px",
-            borderRadius: "999px",
-            background: "#0f172a",
-            display: "block"
-          }}
-        />
-        <span
-          style={{
-            width: "20px",
-            height: "2px",
-            borderRadius: "999px",
-            background: "#0f172a",
-            display: "block"
-          }}
-        />
-      </button>
       <MapSidebar
-        history={searchHistory}
         isOpen={isSidebarOpen}
-        onClearHistory={handleClearHistory}
         onClose={() => setIsSidebarOpen(false)}
         onLogout={handleLogout}
-        onSelectHistory={handleHistorySelect}
+        onThemeModeChange={setThemeMode}
+        resolvedTheme={resolvedTheme}
+        themeMode={themeMode}
       />
       <MapContainer
         currentLocation={currentLocation}
         destination={selectedPlace?.coordinates ?? null}
         heading={location?.heading ?? null}
         isNavigating={isNavigating}
-        onMapPress={handleMapPress}
         routeGeometry={route?.geometry ?? null}
+        theme={resolvedTheme}
         vehicleType={vehicleType}
       />
       {isMonitoringPromptOpen ? (
@@ -572,7 +554,7 @@ function MapHome() {
               position: "fixed",
               inset: 0,
               border: "none",
-              background: "rgba(15, 23, 42, 0.24)",
+              background: isDarkTheme ? "rgba(2, 6, 23, 0.46)" : "rgba(15, 23, 42, 0.24)",
               backdropFilter: "blur(4px)",
               zIndex: 10
             }}
@@ -586,9 +568,13 @@ function MapHome() {
               width: "min(440px, calc(100vw - 32px))",
               padding: "24px",
               borderRadius: "28px",
-              background:
-                "linear-gradient(160deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%)",
-              boxShadow: "0 32px 70px rgba(15, 23, 42, 0.22)",
+              background: isDarkTheme
+                ? "linear-gradient(160deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.98) 100%)"
+                : "linear-gradient(160deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%)",
+              boxShadow: isDarkTheme
+                ? "0 32px 70px rgba(2, 6, 23, 0.44)"
+                : "0 32px 70px rgba(15, 23, 42, 0.22)",
+              color: isDarkTheme ? "#f8fafc" : "#0f172a",
               zIndex: 11
             }}
           >
@@ -608,7 +594,7 @@ function MapHome() {
               style={{
                 marginTop: "12px",
                 marginBottom: "10px",
-                color: "#0f172a",
+                color: isDarkTheme ? "#f8fafc" : "#0f172a",
                 fontSize: "30px",
                 lineHeight: 1.05
               }}
@@ -618,7 +604,7 @@ function MapHome() {
             <p
               style={{
                 margin: 0,
-                color: "#475569",
+                color: isDarkTheme ? "#cbd5e1" : "#475569",
                 lineHeight: 1.6
               }}
             >
@@ -641,9 +627,11 @@ function MapHome() {
                 style={{
                   padding: "14px 16px",
                   borderRadius: "18px",
-                  border: "1px solid rgba(203, 213, 225, 0.9)",
-                  background: "#ffffff",
-                  color: "#0f172a",
+                  border: isDarkTheme
+                    ? "1px solid rgba(71, 85, 105, 0.7)"
+                    : "1px solid rgba(203, 213, 225, 0.9)",
+                  background: isDarkTheme ? "rgba(15,23,42,0.88)" : "#ffffff",
+                  color: isDarkTheme ? "#f8fafc" : "#0f172a",
                   fontWeight: 700,
                   cursor: "pointer"
                 }}
@@ -691,20 +679,21 @@ function MapHome() {
         guidanceDistance={guidance?.distanceLabel ?? null}
         guidanceInstruction={guidance?.instruction ?? null}
         guidanceSecondaryText={guidance?.secondaryText ?? null}
+        history={searchHistory}
         isNavigating={isNavigating}
         isRouteLoading={isRouteLoading}
         isSearchLoading={isSearchLoading}
         onChange={handleQueryChange}
-        onCollapseRequest={() => setSearchCollapseToken((current) => current + 1)}
+        onOpenMenu={() => setIsSidebarOpen(true)}
+        onSelectHistory={handleHistorySelect}
         onStartNavigation={handleStartNavigation}
         onStopNavigation={handleStopNavigation}
         onSelect={handleSuggestionSelect}
         onVehicleTypeChange={setVehicleType}
-        collapseToken={searchCollapseToken}
-        panelOffsetLeft={92}
         query={query}
         routeProfileLabel={route?.profileLabel ?? null}
         suggestions={suggestions}
+        theme={resolvedTheme}
         vehicleType={vehicleType}
       />
     </div>
